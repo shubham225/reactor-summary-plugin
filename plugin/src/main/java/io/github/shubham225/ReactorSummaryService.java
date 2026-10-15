@@ -7,17 +7,50 @@ import org.gradle.api.services.BuildService;
 import org.gradle.api.services.BuildServiceParameters;
 import org.gradle.tooling.events.FinishEvent;
 import org.gradle.tooling.events.OperationCompletionListener;
-import org.gradle.tooling.events.task.*;
+import org.gradle.tooling.events.task.TaskFailureResult;
+import org.gradle.tooling.events.task.TaskFinishEvent;
+import org.gradle.tooling.events.task.TaskOperationDescriptor;
+import org.gradle.tooling.events.task.TaskOperationResult;
+import org.gradle.tooling.events.task.TaskSkippedResult;
+import org.gradle.tooling.events.task.TaskSuccessResult;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * Build service that collects task results from every module and prints the
+ * Reactor Summary when the build finishes.
+ */
 public abstract class ReactorSummaryService
-        implements BuildService<ReactorSummaryService.Params>, OperationCompletionListener {
+        implements BuildService<ReactorSummaryService.Params>,
+        OperationCompletionListener,
+        AutoCloseable {
 
+    /** Parameters passed from the plugin to the service. */
     public interface Params extends BuildServiceParameters {
+
+        /**
+         * Whether the summary should use ANSI colors.
+         *
+         * @return the color flag
+         */
         Property<Boolean> getColor();
+
+        /**
+         * Name of the root project, shown for the root module.
+         *
+         * @return the root project name
+         */
         Property<String> getRootName();
+
+        /**
+         * Delay in milliseconds before the summary is printed.
+         *
+         * @return the delay in milliseconds
+         */
+        Property<Long> getDelayMillis();
     }
 
     private static final Logger LOGGER = Logging.getLogger("reactor-summary");
@@ -51,6 +84,9 @@ public abstract class ReactorSummaryService
 
     private final Map<String, Stat> modules = new TreeMap<>();
     private final long buildStart = System.currentTimeMillis();
+    private final AtomicBoolean printed = new AtomicBoolean(false);
+
+    // Events
 
     @Override
     public synchronized void onFinish(FinishEvent event) {
@@ -76,13 +112,39 @@ public abstract class ReactorSummaryService
         }
     }
 
-    /** Called by ReactorSummaryFlowAction when the build finishes. */
-    public synchronized void printSummary() {
-        if (modules.isEmpty()) return;
+    // Printing
 
-        boolean color = getParameters().getColor().getOrElse(false);
+    /** Called by Gradle when the build finishes. Prints after a short delay. */
+    @Override
+    public void close() {
+        printLater(getParameters().getDelayMillis().getOrElse(10L));
+    }
+
+    private synchronized void printLater(long delay) {
+        if (modules.isEmpty() || !printed.compareAndSet(false, true)) return;
+
+        String text = render(getParameters().getColor().getOrElse(false));
+
+        if (delay <= 0) {
+            LOGGER.lifecycle(text);
+            return;
+        }
+
+        Thread t = new Thread(() -> {
+            try {
+                Thread.sleep(delay);
+            } catch (InterruptedException e) {
+                return;
+            }
+            LOGGER.lifecycle(text);
+        }, "reactor-summary-printer");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private String render(boolean color) {
         String rootName = getParameters().getRootName().getOrElse("root");
-        String line = paint(color, "-".repeat(70), DIM);
+        String line = paint(color, repeat("-", 70), DIM);
 
         int success = 0, upToDate = 0, skipped = 0, failed = 0;
 
@@ -105,7 +167,7 @@ public abstract class ReactorSummaryService
             int dots = Math.max(2, NAME_WIDTH - name.length());
 
             sb.append(name).append(' ')
-                    .append(paint(color, ".".repeat(dots), DIM)).append(' ')
+                    .append(paint(color, repeat(".", dots), DIM)).append(' ')
                     .append(paint(color, pad(status, STATUS_WIDTH), statusColor(status)))
                     .append(' ')
                     .append(paint(color, "[" + formatTime(s.millis()) + "]", DIM))
@@ -121,8 +183,7 @@ public abstract class ReactorSummaryService
                 .append("Total time: ")
                 .append(paint(color, formatTime(System.currentTimeMillis() - buildStart), BOLD)).append('\n')
                 .append(line);
-
-        LOGGER.lifecycle(sb.toString());
+        return sb.toString();
     }
 
     private static String statusColor(String status) {
@@ -144,5 +205,9 @@ public abstract class ReactorSummaryService
 
     private static String formatTime(long ms) {
         return String.format("%.3f s", ms / 1000.0);
+    }
+
+    private static String repeat(String s, int n) {
+        return String.join("", Collections.nCopies(n, s));
     }
 }

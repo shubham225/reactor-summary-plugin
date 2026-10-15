@@ -1,7 +1,6 @@
 
 plugins {
-    // Apply the Java Gradle plugin development plugin to add support for developing Gradle plugins
-    `java-gradle-plugin`
+    id("com.gradle.plugin-publish") version "2.1.1"
 }
 
 group = "io.github.shubham225"
@@ -9,28 +8,38 @@ version = "0.1.0"
 description = "A Gradle plugin for summarizing Project Reactor information"
 
 repositories {
-    // Use Maven Central for resolving dependencies.
     mavenCentral()
 }
 
 dependencies {
-    // Use JUnit Jupiter for testing.
     testImplementation(libs.junit.jupiter)
-
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
-
-gradlePlugin {
-    // Define the plugin
-    val reactorSummery by plugins.creating {
-        id = "io.github.shubham225.reactor-summery"
-        implementationClass = "io.github.shubham225.ReactorSummaryPlugin"
-    }
 }
 
 java {
     toolchain {
-        languageVersion.set(JavaLanguageVersion.of(11))
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(8)
+}
+
+gradlePlugin {
+    website.set("https://github.com/shubham225/reactor-summary-plugin")
+    vcsUrl.set("https://github.com/shubham225/reactor-summary-plugin.git")
+
+    plugins {
+        create("reactorSummary") {
+            id = "io.github.shubham225.reactor-summary"
+            implementationClass = "io.github.shubham225.ReactorSummaryPlugin"
+            displayName = "Reactor Summary"
+            description = "Prints a Maven-style Reactor Summary (status and time per module) for multi-module Gradle builds."
+            tags.set(listOf("multi-module", "build-summary", "reporting", "reactor"))
+        }
     }
 }
 
@@ -58,6 +67,10 @@ tasks.named<Task>("check") {
 tasks.named<Test>("test") {
     // Use JUnit Jupiter for unit tests.
     useJUnitPlatform()
+}
+
+tasks.withType<Test>().configureEach {
+    failOnNoDiscoveredTests = false
 }
 
 tasks.jar {
