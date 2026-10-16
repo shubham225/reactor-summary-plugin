@@ -70,7 +70,7 @@ public class ReactorSummaryPlugin implements Plugin<Project> {
         }
     }
 
-    /** -PreactorSummary.delayMs=1000 ; 0 prints immediately (above Gradle's BUILD line). */
+    /** -PreactorSummary.delayMs=30 ; 0 prints immediately (above Gradle's BUILD line). */
     private static long resolveDelay(Project project) {
         Object prop = project.findProperty("reactorSummary.delayMs");
         if (prop != null) {
@@ -80,6 +80,6 @@ public class ReactorSummaryPlugin implements Plugin<Project> {
                 // use default
             }
         }
-        return 10L;
+        return 30L;
     }
 }

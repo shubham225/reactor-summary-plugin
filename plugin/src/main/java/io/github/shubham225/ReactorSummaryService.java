@@ -117,7 +117,7 @@ public abstract class ReactorSummaryService
     /** Called by Gradle when the build finishes. Prints after a short delay. */
     @Override
     public void close() {
-        printLater(getParameters().getDelayMillis().getOrElse(10L));
+        printLater(getParameters().getDelayMillis().getOrElse(30L));
     }
 
     private synchronized void printLater(long delay) {
