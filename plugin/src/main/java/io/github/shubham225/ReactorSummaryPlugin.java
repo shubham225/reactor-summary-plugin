@@ -1,5 +1,8 @@
 package io.github.shubham225;
 
+import io.github.shubham225.constants.PluginConstant;
+import io.github.shubham225.service.ReactorSummaryService;
+import io.github.shubham225.utils.SystemUtils;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.logging.configuration.ConsoleOutput;
@@ -7,7 +10,6 @@ import org.gradle.api.provider.Provider;
 import org.gradle.build.event.BuildEventsListenerRegistry;
 
 import javax.inject.Inject;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -47,18 +49,22 @@ public class ReactorSummaryPlugin implements Plugin<Project> {
                     spec.getParameters().getRootName().set(rootName);
                     spec.getParameters().getDelayMillis().set(delay);
                 });
+
         registry.onTaskCompletion(service);
     }
 
     /** -PreactorSummary.color=true|false (or in gradle.properties). */
-    private static boolean resolveColor(Project project) {
+    private boolean resolveColor(Project project) {
         Object prop = project.findProperty("reactorSummary.color");
+
         if (prop != null) {
             String v = prop.toString().trim();
             if (v.equalsIgnoreCase("true")) return true;
             if (v.equalsIgnoreCase("false")) return false;
         }
+
         ConsoleOutput console = project.getGradle().getStartParameter().getConsoleOutput();
+
         switch (console) {
             case Plain:
                 return false;
@@ -78,7 +84,7 @@ public class ReactorSummaryPlugin implements Plugin<Project> {
      * Linux/macOS (and Git Bash/MSYS on Windows) {@code TERM} is set, but
      * cmd.exe and PowerShell never set it, so Windows needs its own checks.
      */
-    private static boolean autoDetectColor() {
+    private boolean autoDetectColor() {
         Map<String, String> env = System.getenv();
 
         String noColor = env.get("NO_COLOR");
@@ -89,40 +95,28 @@ public class ReactorSummaryPlugin implements Plugin<Project> {
         if ("dumb".equals(term)) return false;
         if (term != null || env.get("COLORTERM") != null) return true;
 
-        if (isWindows()) {
+        if (SystemUtils.isWindows()) {
             return env.get("WT_SESSION") != null                    // Windows Terminal
                     || env.get("TERM_PROGRAM") != null              // VS Code, etc.
                     || env.get("ANSICON") != null                   // ANSICON
                     || "ON".equalsIgnoreCase(env.get("ConEmuANSI")) // ConEmu / Cmder
                     || env.get("IDEA_INITIAL_DIRECTORY") != null    // IntelliJ terminal
-                    || isWindows10OrNewer();                        // conhost supports VT
+                    || SystemUtils.isWindows10OrNewer();            // conhost supports VT
         }
         return false;
     }
 
-    private static boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
-    }
-
-    private static boolean isWindows10OrNewer() {
-        String[] v = System.getProperty("os.version", "0").split("\\.");
-        try {
-            return Integer.parseInt(v[0]) >= 10;
-        } catch (NumberFormatException e) {
-            return false;
-        }
-    }
-
-    /** -PreactorSummary.delayMs=30 ; 0 prints immediately (above Gradle's BUILD line). */
-    private static long resolveDelay(Project project) {
+    /** -PreactorSummary.delayMs=DEFAULT_DELAY_MILLIS ; 0 prints immediately (above Gradle's BUILD line). */
+    private long resolveDelay(Project project) {
         Object prop = project.findProperty("reactorSummary.delayMs");
+
         if (prop != null) {
             try {
                 return Long.parseLong(prop.toString().trim());
             } catch (NumberFormatException ignored) {
-                // use default
             }
         }
-        return 30L;
+
+        return PluginConstant.DEFAULT_DELAY_MILLIS;
     }
 }

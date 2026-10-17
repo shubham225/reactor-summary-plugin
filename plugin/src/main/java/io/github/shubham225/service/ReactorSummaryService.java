@@ -1,5 +1,10 @@
-package io.github.shubham225;
+package io.github.shubham225.service;
 
+import io.github.shubham225.constants.AnsiColor;
+import io.github.shubham225.constants.AnsiStyle;
+import io.github.shubham225.constants.PluginConstant;
+import io.github.shubham225.model.Status;
+import io.github.shubham225.utils.Formatter;
 import org.gradle.api.logging.Logger;
 import org.gradle.api.logging.Logging;
 import org.gradle.api.provider.Property;
@@ -9,7 +14,6 @@ import org.gradle.tooling.events.FinishEvent;
 import org.gradle.tooling.events.OperationCompletionListener;
 import org.gradle.tooling.events.task.TaskFailureResult;
 import org.gradle.tooling.events.task.TaskFinishEvent;
-import org.gradle.tooling.events.task.TaskOperationDescriptor;
 import org.gradle.tooling.events.task.TaskOperationResult;
 import org.gradle.tooling.events.task.TaskSkippedResult;
 import org.gradle.tooling.events.task.TaskSuccessResult;
@@ -56,50 +60,22 @@ public abstract class ReactorSummaryService
 
     private static final Logger LOGGER = Logging.getLogger("reactor-summary");
 
-    private static final String RESET = "\u001B[0m";
-    private static final String BOLD = "\u001B[1m";
-    private static final String DIM = "\u001B[2m";
-    private static final String RED = "\u001B[31m";
-    private static final String GREEN = "\u001B[32m";
-    private static final String YELLOW = "\u001B[33m";
-    private static final String CYAN = "\u001B[36m";
-
-    private static final int NAME_WIDTH = 50;
-    private static final int STATUS_WIDTH = 10;
-
-    private static class Stat {
-        int executed, upToDate, skipped, failed;
-        long firstStart = Long.MAX_VALUE, lastEnd = 0;
-
-        String status() {
-            if (failed > 0) return "FAILED";
-            if (executed > 0) return "SUCCESS";
-            if (upToDate > 0) return "UP-TO-DATE";
-            return "SKIPPED";
-        }
-
-        long millis() {
-            return Math.max(0, lastEnd - firstStart);
-        }
-    }
-
-    private final Map<String, Stat> modules = new TreeMap<>();
+    private final Map<String, Status> modules = new TreeMap<>();
     private final long buildStart = System.currentTimeMillis();
     private final AtomicBoolean printed = new AtomicBoolean(false);
 
     // Events
-
     @Override
     public synchronized void onFinish(FinishEvent event) {
         if (!(event instanceof TaskFinishEvent)) return;
         TaskFinishEvent e = (TaskFinishEvent) event;
 
-        String taskPath = ((TaskOperationDescriptor) e.getDescriptor()).getTaskPath();
+        String taskPath = e.getDescriptor().getTaskPath();
         int idx = taskPath.lastIndexOf(':');
         String module = idx <= 0 ? ":" : taskPath.substring(0, idx);
 
         TaskOperationResult r = e.getResult();
-        Stat s = modules.computeIfAbsent(module, k -> new Stat());
+        Status s = modules.computeIfAbsent(module, k -> new Status());
         s.firstStart = Math.min(s.firstStart, r.getStartTime());
         s.lastEnd = Math.max(s.lastEnd, r.getEndTime());
 
@@ -114,11 +90,10 @@ public abstract class ReactorSummaryService
     }
 
     // Printing
-
     /** Called by Gradle when the build finishes. Prints after a short delay. */
     @Override
     public void close() {
-        printLater(getParameters().getDelayMillis().getOrElse(30L));
+        printLater(getParameters().getDelayMillis().getOrElse(PluginConstant.DEFAULT_DELAY_MILLIS));
     }
 
     private synchronized void printLater(long delay) {
@@ -145,17 +120,17 @@ public abstract class ReactorSummaryService
 
     private String render(boolean color) {
         String rootName = getParameters().getRootName().getOrElse("root");
-        String line = paint(color, repeat("-", 70), DIM);
+        String line = paint(color, repeat("-", 70), AnsiStyle.DIM);
 
         int success = 0, upToDate = 0, skipped = 0, failed = 0;
 
         StringBuilder sb = new StringBuilder("\n");
         sb.append(line).append('\n')
-                .append(paint(color, "Reactor Summary", BOLD)).append('\n')
+                .append(paint(color, "Reactor Summary", AnsiStyle.BOLD)).append('\n')
                 .append(line).append('\n');
 
-        for (Map.Entry<String, Stat> en : modules.entrySet()) {
-            Stat s = en.getValue();
+        for (Map.Entry<String, Status> en : modules.entrySet()) {
+            Status s = en.getValue();
             String status = s.status();
             switch (status) {
                 case "SUCCESS":    success++;  break;
@@ -165,60 +140,46 @@ public abstract class ReactorSummaryService
             }
 
             String name = en.getKey().equals(":") ? rootName + " (root)" : en.getKey().substring(1);
-            int dots = Math.max(2, NAME_WIDTH - name.length());
+            int dots = Math.max(2, PluginConstant.NAME_WIDTH - name.length());
 
             sb.append(name).append(' ')
-                    .append(paint(color, repeat(".", dots), DIM)).append(' ')
-                    .append(paint(color, pad(status, STATUS_WIDTH), statusColor(status)))
+                    .append(paint(color, repeat(".", dots), AnsiStyle.DIM)).append(' ')
+                    .append(paint(color, pad(status, PluginConstant.STATUS_WIDTH), statusColor(status)))
                     .append(' ')
-                    .append(paint(color, "[" + formatTime(s.millis()) + "]", DIM))
+                    .append(paint(color, "[" + Formatter.formatTime(s.millis()) + "]", AnsiStyle.DIM))
                     .append('\n');
         }
 
         sb.append(line).append('\n')
-                .append(paint(color, "Modules: " + modules.size(), BOLD)).append("  ")
-                .append(paint(color, success + " success", GREEN)).append("  ")
-                .append(paint(color, upToDate + " up-to-date", CYAN)).append("  ")
-                .append(paint(color, skipped + " skipped", YELLOW)).append("  ")
-                .append(paint(color, failed + " failed", failed > 0 ? RED + BOLD : DIM)).append('\n')
+                .append(paint(color, "Modules: " + modules.size(), AnsiStyle.BOLD)).append("  ")
+                .append(paint(color, success + " success", AnsiColor.GREEN)).append("  ")
+                .append(paint(color, upToDate + " up-to-date", AnsiColor.CYAN)).append("  ")
+                .append(paint(color, skipped + " skipped", AnsiColor.YELLOW)).append("  ")
+                .append(paint(color, failed + " failed", failed > 0 ? AnsiColor.RED + AnsiStyle.BOLD : AnsiStyle.DIM)).append('\n')
                 .append("Total time: ")
-                .append(paint(color, formatTime(System.currentTimeMillis() - buildStart), BOLD)).append('\n')
+                .append(paint(color, Formatter.formatTime(System.currentTimeMillis() - buildStart), AnsiStyle.BOLD)).append('\n')
                 .append(line);
         return sb.toString();
     }
 
-    private static String statusColor(String status) {
+    private String statusColor(String status) {
         switch (status) {
-            case "SUCCESS":    return GREEN + BOLD;
-            case "UP-TO-DATE": return CYAN;
-            case "SKIPPED":    return YELLOW;
-            default:           return RED + BOLD;
+            case "SUCCESS":    return AnsiColor.GREEN + AnsiStyle.BOLD;
+            case "UP-TO-DATE": return AnsiColor.CYAN;
+            case "SKIPPED":    return AnsiColor.YELLOW;
+            default:           return AnsiColor.RED + AnsiStyle.BOLD;
         }
     }
 
-    private static String paint(boolean color, String text, String codes) {
-        return color ? codes + text + RESET : text;
+    private String paint(boolean color, String text, String codes) {
+        return color ? codes + text + AnsiStyle.DEFAULT : text;
     }
 
-    private static String pad(String s, int width) {
+    private String pad(String s, int width) {
         return String.format("%-" + width + "s", s);
     }
 
-    /** Under a minute: "12.345 s". A minute or more: "2m 29s". An hour or more: "1h 2m 5s". */
-    private static String formatTime(long ms) {
-        if (ms < 60_000) {
-            return String.format(Locale.ROOT, "%.3f s", ms / 1000.0);
-        }
-        long totalSeconds = Math.round(ms / 1000.0);
-        long hours = totalSeconds / 3600;
-        long minutes = (totalSeconds % 3600) / 60;
-        long seconds = totalSeconds % 60;
-        return hours > 0
-                ? hours + "h " + minutes + "m " + seconds + "s"
-                : minutes + "m " + seconds + "s";
-    }
-
-    private static String repeat(String s, int n) {
+    private String repeat(String s, int n) {
         return String.join("", Collections.nCopies(n, s));
     }
 }

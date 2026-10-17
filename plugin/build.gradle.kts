@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "io.github.shubham225"
-version = "0.1.0"
+version = "0.2.0"
 description = "A Gradle plugin for summarizing Project Reactor information"
 
 repositories {

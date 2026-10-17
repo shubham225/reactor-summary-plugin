@@ -57,7 +57,7 @@ In the root `build.gradle.kts`:
 
 ```kotlin
 plugins {
-    id("io.github.shubham225.reactor-summary") version "0.1.0"
+    id("io.github.shubham225.reactor-summary") version "0.2.0"
 }
 ```
 
@@ -68,7 +68,7 @@ Build the jar (see [Building from source](#building-from-source)), copy it to a 
 ```kotlin
 buildscript {
     dependencies {
-        classpath(files("libs/reactor-summary-plugin-0.1.0.jar"))
+        classpath(files("libs/reactor-summary-plugin-0.2.0.jar"))
     }
 }
 
@@ -106,7 +106,7 @@ In the root `build.gradle.kts`:
 
 ```kotlin
 plugins {
-    id("io.github.shubham225.reactor-summary") version "0.1.0"
+    id("io.github.shubham225.reactor-summary") version "0.2.0"
 }
 ```
 
@@ -117,7 +117,7 @@ Load the jar from a Gradle init script, for example `~/.gradle/init.d/reactor-su
 ```kotlin
 initscript {
     dependencies {
-        classpath(files("/absolute/path/to/reactor-summary-plugin-0.1.0.jar"))
+        classpath(files("/absolute/path/to/reactor-summary-plugin-0.2.0.jar"))
     }
 }
 
