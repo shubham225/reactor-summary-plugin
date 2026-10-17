@@ -7,6 +7,8 @@ import org.gradle.api.provider.Provider;
 import org.gradle.build.event.BuildEventsListenerRegistry;
 
 import javax.inject.Inject;
+import java.util.Locale;
+import java.util.Map;
 
 /**
  * Gradle plugin that prints a Maven-style "Reactor Summary" (status and elapsed
@@ -64,9 +66,50 @@ public class ReactorSummaryPlugin implements Plugin<Project> {
             case Verbose:
                 return true;
             default: // Auto
-                String term = System.getenv("TERM");
-                return System.getenv("NO_COLOR") == null
-                        && term != null && !term.equals("dumb");
+                return autoDetectColor();
+        }
+    }
+
+    /**
+     * Best-effort ANSI detection for {@code --console=auto}.
+     *
+     * <p>The build runs in the Gradle daemon, which has no terminal of its own,
+     * so we can only look at the environment forwarded from the client. On
+     * Linux/macOS (and Git Bash/MSYS on Windows) {@code TERM} is set, but
+     * cmd.exe and PowerShell never set it, so Windows needs its own checks.
+     */
+    private static boolean autoDetectColor() {
+        Map<String, String> env = System.getenv();
+
+        String noColor = env.get("NO_COLOR");
+        if (noColor != null && !noColor.isEmpty()) return false;   // https://no-color.org
+        if (env.get("CI") != null) return false;                    // logs, not terminals
+
+        String term = env.get("TERM");
+        if ("dumb".equals(term)) return false;
+        if (term != null || env.get("COLORTERM") != null) return true;
+
+        if (isWindows()) {
+            return env.get("WT_SESSION") != null                    // Windows Terminal
+                    || env.get("TERM_PROGRAM") != null              // VS Code, etc.
+                    || env.get("ANSICON") != null                   // ANSICON
+                    || "ON".equalsIgnoreCase(env.get("ConEmuANSI")) // ConEmu / Cmder
+                    || env.get("IDEA_INITIAL_DIRECTORY") != null    // IntelliJ terminal
+                    || isWindows10OrNewer();                        // conhost supports VT
+        }
+        return false;
+    }
+
+    private static boolean isWindows() {
+        return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows");
+    }
+
+    private static boolean isWindows10OrNewer() {
+        String[] v = System.getProperty("os.version", "0").split("\\.");
+        try {
+            return Integer.parseInt(v[0]) >= 10;
+        } catch (NumberFormatException e) {
+            return false;
         }
     }
 

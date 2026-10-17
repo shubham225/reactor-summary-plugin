@@ -15,6 +15,7 @@ import org.gradle.tooling.events.task.TaskSkippedResult;
 import org.gradle.tooling.events.task.TaskSuccessResult;
 
 import java.util.Collections;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -203,8 +204,18 @@ public abstract class ReactorSummaryService
         return String.format("%-" + width + "s", s);
     }
 
+    /** Under a minute: "12.345 s". A minute or more: "2m 29s". An hour or more: "1h 2m 5s". */
     private static String formatTime(long ms) {
-        return String.format("%.3f s", ms / 1000.0);
+        if (ms < 60_000) {
+            return String.format(Locale.ROOT, "%.3f s", ms / 1000.0);
+        }
+        long totalSeconds = Math.round(ms / 1000.0);
+        long hours = totalSeconds / 3600;
+        long minutes = (totalSeconds % 3600) / 60;
+        long seconds = totalSeconds % 60;
+        return hours > 0
+                ? hours + "h " + minutes + "m " + seconds + "s"
+                : minutes + "m " + seconds + "s";
     }
 
     private static String repeat(String s, int n) {
